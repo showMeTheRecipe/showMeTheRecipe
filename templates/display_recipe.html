@@ -1,0 +1,175 @@
+<!--from flask import Flask, request, jsonify, render_template, redirect, url_for-->
+<!--import boto3-->
+<!--import json-->
+<!--import os-->
+<!--import uuid-->
+<!--import tempfile-->
+<!--from transcribe_audio import transcribe_audio-->
+<!--from youtube_video_down import download_audio_from_youtube, upload_to_s3-->
+
+<!--app = Flask(__name__)-->
+
+<!--# AWS SDK for Python (Boto3) 클라이언트 초기화-->
+<!--bedrock_client = boto3.client('bedrock-runtime', region_name="us-east-1")-->
+<!--s3_client = boto3.client('s3', region_name='ap-northeast-2')-->
+
+<!--BUCKET_NAME = 'showmetherecipe-bucket'-->
+<!--REGION_NAME = 'ap-northeast-2'-->
+
+<!--def generate_s3_url(bucket_name, s3_key, region):-->
+<!--    url = f"https://{bucket_name}.s3.{region}.amazonaws.com/{s3_key}"-->
+<!--    return url-->
+
+<!--@app.route('/')-->
+<!--def index():-->
+<!--    return render_template('index.html')-->
+
+<!--@app.route('/extract_recipe', methods=['POST'])-->
+<!--def extract_recipe():-->
+<!--    video_url = request.form['video_url']-->
+<!--    print(video_url)-->
+    
+<!--    try:-->
+<!--        # 1. Download video and upload to S3-->
+<!--        local_file_path = "/home/ec2-user/environment/hohoit.mp3"-->
+<!--        print(local_file_path)-->
+<!--        s3_file_key = f"audio/{uuid.uuid4()}.mp3"-->
+            
+<!--        download_audio_from_youtube(video_url, local_file_path)-->
+<!--        print("다운로드 완료")-->
+<!--        upload_to_s3(local_file_path, BUCKET_NAME, s3_file_key)-->
+<!--        os.unlink(local_file_path)-->
+<!--        print("업로드 완료")-->
+        
+<!--        # 2. Generate S3 URL and start AWS Transcribe job-->
+<!--        s3_url = generate_s3_url(BUCKET_NAME, s3_file_key, REGION_NAME)-->
+<!--        job_name = f"transcribe-{uuid.uuid4()}"-->
+<!--        transcript_uri = transcribe_audio(job_name, s3_url, REGION_NAME)-->
+        
+<!--        if not transcript_uri:-->
+<!--            return jsonify({'success': False, 'error': 'Transcription failed'})-->
+        
+<!--        # 3. Get transcription result-->
+<!--        transcript_key = transcript_uri.split('/')[-1]-->
+<!--        response = s3_client.get_object(Bucket=BUCKET_NAME, Key=transcript_key)-->
+<!--        transcript_text = json.loads(response['Body'].read().decode('utf-8'))['results']['transcripts'][0]['transcript']-->
+        
+<!--        print(f"Transcription: {transcript_text[:100]}...")  # Log first 100 characters-->
+        
+<!--        # 4. Use AWS Bedrock to extract recipe-->
+<!--        prompt = f"다음 텍스트에서 요리 레시피를 추출하여 다음과 같은 정형화된 형식으로 제공해주세요:\n\n재료:\n- 재료1\n- 재료2\n...\n\n조리 과정:\n1. 첫 번째 단계\n2. 두 번째 단계\n...\n\n텍스트:\n{transcript_text}"-->
+        
+<!--        response = bedrock_client.invoke_model(-->
+<!--            modelId='anthropic.claude-v2',-->
+<!--            contentType='application/json',-->
+<!--            accept='application/json',-->
+<!--            body=json.dumps({-->
+<!--                "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",-->
+<!--                "max_tokens_to_sample": 1000,-->
+<!--                "temperature": 0.7,-->
+<!--                "top_p": 0.95,-->
+<!--            })-->
+<!--        )-->
+        
+<!--        recipe = json.loads(response['body'].read())['completion']-->
+        
+<!--        print(f"Extracted recipe: {recipe[:100]}...")  # Log first 100 characters-->
+        
+<!--        # 5. Render the recipe on the display_recipe.html page-->
+<!--        return render_template('display_recipe.html', recipe=recipe)-->
+    
+<!--    except Exception as e:-->
+<!--        print(f"Error: {str(e)}")  # Log the full error-->
+<!--        return jsonify({'success': False, 'error': str(e)})-->
+
+<!--@app.route('/chat', methods=['POST'])-->
+<!--def chat():-->
+<!--    user_input = request.json.get('message', '')-->
+    
+<!--    if not user_input:-->
+<!--        return jsonify({'error': 'No input message provided'}), 400-->
+    
+<!--    try:-->
+<!--        # Bedrock에 요청 보내기-->
+<!--        response = bedrock_client.invoke_model(-->
+<!--            modelId='anthropic.claude-v2',-->
+<!--            contentType='application/json',-->
+<!--            accept='application/json',-->
+<!--            body=json.dumps({-->
+<!--                "prompt": f"\n\nHuman: {user_input}\n\nAssistant:",-->
+<!--                "max_tokens_to_sample": 100-->
+<!--            })-->
+<!--        )-->
+        
+<!--        # Bedrock의 응답 처리-->
+<!--        response_body = json.loads(response['body'].read().decode('utf-8'))-->
+<!--        chatgpt_response = response_body.get('completion', '')-->
+        
+<!--        return jsonify({'response': chatgpt_response})-->
+    
+<!--    except Exception as e:-->
+<!--        return jsonify({'error': str(e)}), 500-->
+
+<!--if __name__ == '__main__':-->
+<!--    app.run(debug=True, host='0.0.0.0')-->
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>레시피 결과</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+        }
+        .container {
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+        }
+        .recipe {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: #333;
+            text-align: left;
+            margin: 20px auto;
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>레시피 결과</h1>
+        </div>
+        <div class="recipe">
+            <h2>추출된 레시피:</h2>
+            <pre id="recipe-text"></pre>
+        </div>
+    </div>
+
+    <script>
+        // 페이지 로드 시 URL에서 레시피 텍스트 가져오기
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const recipe = urlParams.get('recipe');
+
+            if (recipe) {
+                document.getElementById('recipe-text').textContent = decodeURIComponent(recipe);
+            } else {
+                document.getElementById('recipe-text').textContent = '레시피를 찾을 수 없습니다.';
+            }
+        };
+    </script>
+</body>
+</html>
