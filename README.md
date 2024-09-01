@@ -1,6 +1,5 @@
 # ShowMeTheRecipe
-
-![ShowMeTheRecipe Logo](path/to/your/image.png)
+<img width="1279" alt="IMG_9571" src="https://github.com/user-attachments/assets/fa1d70a9-e919-49d5-8125-66b9f1cd601c">
 
 Welcome to **ShowMeTheRecipe**, an innovative service designed to make your cooking experience easier by providing detailed, step-by-step recipe guidance. This service leverages the power of several AWS technologies to deliver a seamless and interactive user experience.
 
